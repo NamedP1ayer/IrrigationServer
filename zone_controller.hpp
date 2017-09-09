@@ -38,15 +38,17 @@ private:
     std::vector<Zone> zones_;
 
     // These two should be read from a configuration file.
-    static const int MASTER_PIN = 0;
+    Zone master_;
     int pressureZone = 2;
 
-    bool masterOn = false;
     int pressureRelease = 0;
 
     void On(int filedes, std::vector<std::string>& line);
     void Off(int filedes, std::vector<std::string>& line);
     void Status(int filedes, std::vector<std::string>& line);
+
+    void Open(Zone & z);
+    void Close(Zone & z);
 };
 
 #endif // zone_controller_hpp__

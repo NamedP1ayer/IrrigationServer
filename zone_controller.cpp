@@ -20,6 +20,10 @@ ZoneController::ZoneController(Server& comms)
     zones_.push_back({"grass", 3, 0, false});
     zones_.push_back({"vedgie", 4, 0, false});
     zones_.push_back({"side", 5, 0, false});
+
+    master_.name = "MASTER";
+    master_.pin = 0;
+    master_.currentlyOn = false;
 }
 
 int ZoneController::ParseLine(int filedes, std::string& sentence)
@@ -136,7 +140,7 @@ void ZoneController::Periodic(void)
       // don't shut a zone if it is releaving preassure in the manafold
       if (z.currentlyOn && (pressureRelease < 0 || pressureZone != i))
       {
-        //TODO fprintf(stderr, "Shutting %s\n\r", zones[i].name.c_str());
+        Close(z);
         z.currentlyOn = false;
       }
     }
@@ -151,29 +155,25 @@ void ZoneController::Periodic(void)
       pressureRelease = 0;
       if (z.currentlyOn == false)
       {
-        //TODO fprintf(stderr, "Opening %s\n\r", zones[i].name.c_str());
-        z.currentlyOn = true;
+        Open(z);
       }
     }
   }
 
   if (oneOn)
   {
-    if (masterOn == false)
+    if (master_.currentlyOn == false)
     {
-      //TODO fprintf(stderr, "Opening MASTER\n\r");
-      masterOn = true;
+      Open(master_);
     }
   }
   else
   {
-    if (masterOn == true)
+    if (master_.currentlyOn == true)
     {
-      //TODO fprintf(stderr, "Shutting MASTER\n\r");
-      masterOn = false;
+      Close(master_);
       pressureRelease = 20;
-      //TODO fprintf(stderr, "Opening preassure zone %s\n\r", zones[pressureZone].name.c_str());
-      zones_[pressureZone].currentlyOn = true;
+      Open(zones_[pressureZone]);
     }
   }
 
@@ -183,10 +183,21 @@ void ZoneController::Periodic(void)
 void ZoneController::ShutAllValves(void)
 {
     comms_.PrintfAllSockets("Shutting all values\r\n");
-    comms_.PrintfAllSockets("Shutting MASTER - %i\r\n", MASTER_PIN);
+    Close(master_);
     for (int i = 0; i < zones_.size(); i++)
     {
-        comms_.PrintfAllSockets("Shutting %s - %i\r\n", zones_[i].name.c_str(), zones_[i].pin);
-        zones_[i].currentlyOn = false;
+        Close(zones_[i]);
     }
+}
+
+void ZoneController::Open(Zone & z)
+{
+    comms_.PrintfAllSockets("Opening %s, pin %i\r\n", z.name.c_str(), z.pin);
+    z.currentlyOn = true;
+}
+
+void ZoneController::Close(Zone & z)
+{
+    comms_.PrintfAllSockets("Shutting %s, pin %i\r\n", z.name.c_str(), z.pin);
+    z.currentlyOn = false;
 }
