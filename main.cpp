@@ -32,24 +32,15 @@ void fprintfsock(int s, const char* f, ...)
     free( buf );
 }
 
-struct Zone
-{
-    std::string name;
-    int pin;
-    int secondsRemaining;
-};
+typedef void (*Command)(int filedes, std::vector<std::string>& line);
 
-Zone zones[] = {
-    {"Citrus", 2, 0},
-    {"Grass", 3, 0},
-    {"Vedgie", 4, 0},
-    {"Side", 5, 0}
-};
+void On(int filedes, std::vector<std::string>& line);
+void Off(int filedes, std::vector<std::string>& line);
+void Status(int filedes, std::vector<std::string>& line);
+void Periodic(void);
 
-static const int NUMBER_OF_ZONES = sizeof(zones) / sizeof(Zone);
-
-static const int MASTER_PIN = 0;
-
+typedef std::map<std::string, Command> Commands;
+Commands commands_ = {{"on" , On}, {"off", Off}, {"status", Status}};;
 
 struct Connection
 {
@@ -57,6 +48,8 @@ struct Connection
 };
 
 typedef std::map<int, Connection> Connections;
+
+
 Connections connections_;
 
 void printallsockets(const char* f, ...)
@@ -79,8 +72,15 @@ void printallsockets(const char* f, ...)
 int parse_line(int filedes, std::string& sentence)
 {
   std::istringstream iss(sentence);
-  std::vector<std::string> tokens{std::istream_iterator<string>{iss},
-                      std::istream_iterator<string>{}};
+  std::vector<std::string> tokens{std::istream_iterator<std::string>{iss},
+                      std::istream_iterator<std::string>{}};
+  if (tokens.size() > 0)
+  {
+    if (commands_.find(tokens.front()) != commands_.end())
+    {
+      commands_[tokens.front()](filedes, tokens);
+    }
+  }
 }
 
 int read_from_client(int filedes)
@@ -151,15 +151,8 @@ int make_socket(uint16_t port)
 }
 
 
-void ShutAllValves(void)
-{
-    printallsockets("Shutting all values\r\n");
-    printallsockets("Shutting MASTER - %i\r\n", MASTER_PIN);
-    for (int i = 0; i < NUMBER_OF_ZONES; i++)
-    {
-        printallsockets("Shutting %s - %i\r\n", zones[i].name.c_str(), zones[i].pin);
-    }
-}
+void ShutAllValves(void);
+
 
 void SignalHandler(int signum)
 {
@@ -207,7 +200,7 @@ int main (void)
             perror ("select");
             exit (EXIT_FAILURE);
         }
-        printf(".\n");
+        Periodic();
         /* Service all the sockets with input pending. */
         for (i = 0; i < FD_SETSIZE; ++i)
             if (FD_ISSET (i, &read_fd_set))
@@ -240,5 +233,53 @@ int main (void)
                     }
                 }
             }
+    }
+}
+
+struct Zone
+{
+    std::string name;
+    int pin;
+    int secondsRemaining;
+};
+
+Zone zones[] = {
+    {"Citrus", 2, 0},
+    {"Grass", 3, 0},
+    {"Vedgie", 4, 0},
+    {"Side", 5, 0}
+};
+
+static const int NUMBER_OF_ZONES = sizeof(zones) / sizeof(Zone);
+
+static const int MASTER_PIN = 0;
+
+void On(int filedes, std::vector<std::string>& line)
+{
+  fprintfsock(filedes, "On!\r\n");
+}
+
+void Off(int filedes, std::vector<std::string>& line)
+{
+  fprintfsock(filedes, "Off!\r\n");
+}
+
+void Status(int filedes, std::vector<std::string>& line)
+{
+  fprintfsock(filedes, "Status!\r\n");
+}
+
+void Periodic(void)
+{
+  printallsockets("Periodic!\r\n");
+}
+
+void ShutAllValves(void)
+{
+    printallsockets("Shutting all values\r\n");
+    printallsockets("Shutting MASTER - %i\r\n", MASTER_PIN);
+    for (int i = 0; i < NUMBER_OF_ZONES; i++)
+    {
+        printallsockets("Shutting %s - %i\r\n", zones[i].name.c_str(), zones[i].pin);
     }
 }
