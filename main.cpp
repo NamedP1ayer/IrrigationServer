@@ -16,6 +16,7 @@
 #include <iterator>
 #include <map>
 #include <vector>
+#include <time.h>
 
 #define PORT    5555
 #define MAXMSG  512
@@ -27,7 +28,7 @@ void fprintfsock(int s, const char* f, ...)
     int l = vsnprintf( 0, 0, f, a );
     char* buf = (char*) malloc( l + 1 );
     va_start( a, f );
-    vsnprintf( buf, l, f, a );
+    vsnprintf( buf, l + 1, f, a );
     send( s, buf, l, 0 );
     free( buf );
 }
@@ -241,27 +242,32 @@ struct Zone
     std::string name;
     int pin;
     int secondsRemaining;
+    bool currentlyOn;
 };
 
 Zone zones[] = {
-    {"citrus", 2, 0},
-    {"grass", 3, 0},
-    {"vedgie", 4, 0},
-    {"side", 5, 0}
+    {"citrus", 2, 0, false},
+    {"grass", 3, 0, false},
+    {"vedgie", 4, 0, false},
+    {"side", 5, 0, false}
 };
 
 static const int NUMBER_OF_ZONES = sizeof(zones) / sizeof(Zone);
 
 static const int MASTER_PIN = 0;
+bool masterOn = false;
+int pressureRelease = 0;
+int pressureZone = 2;
 
 void On(int filedes, std::vector<std::string>& line)
 {
   if (line.size() == 3)
   {
     bool found = false;
-    for (int i = 0; i < NUMBER_OF_ZONES && found == false; i++)
+    int i = 0;
+    for (; i < NUMBER_OF_ZONES && found == false; i++)
     {
-      found = line[2] == zones[i].name;
+      found = line[1] == zones[i].name;
     }
     long seconds = strtol(line[2].c_str(), NULL, 10);
 
@@ -271,7 +277,7 @@ void On(int filedes, std::vector<std::string>& line)
     }
     else
     {
-
+      i--;
       for (int j = 0; j < NUMBER_OF_ZONES; j++)
       {
         if ((i != j) && zones[j].secondsRemaining > 0)
@@ -296,9 +302,10 @@ void Off(int filedes, std::vector<std::string>& line)
   if (line.size() == 2)
   {
     bool found = false;
-    for (int i = 0; i < NUMBER_OF_ZONES && found == false; i++)
+    int i = 0;
+    for (; i < NUMBER_OF_ZONES && found == false; i++)
     {
-      found = line[2] == zones[i].name;
+      found = line[1] == zones[i].name;
     }
 
     if (found == false)
@@ -307,6 +314,7 @@ void Off(int filedes, std::vector<std::string>& line)
     }
     else
     {
+      i--;
       zones[i].secondsRemaining = 0;
       fprintfsock(filedes, "Zone %s off.\r\n", zones[i].name.c_str());
     }
@@ -327,7 +335,71 @@ void Status(int filedes, std::vector<std::string>& line)
 
 void Periodic(void)
 {
-  //printallsockets("Periodic!\r\n");
+  static time_t lastSeconds = time(NULL);
+
+  time_t thisTime = time(NULL);
+  time_t delta = thisTime - lastSeconds;
+  lastSeconds = thisTime;
+  bool oneOn = false;
+
+ // after the system is disconnected from the mains, let one of the zones
+ // release the preassure on the manafold by opening it for some amount of
+ // time.
+  pressureRelease -= delta;
+
+  // first shut them down
+  for (int i = 0; i < NUMBER_OF_ZONES; i++)
+  {
+    Zone& z(zones[i]);
+    z.secondsRemaining -= delta;
+    if (z.secondsRemaining <= 0)
+    {
+      z.secondsRemaining = 0;
+      // don't shut a zone if it is releaving preassure in the manafold
+      if (z.currentlyOn && (pressureRelease < 0 || pressureZone != i))
+      {
+        fprintf(stderr, "Turning off %s\n\r", zones[i].name.c_str());
+        z.currentlyOn = false;
+      }
+    }
+  }
+
+  for (int i = 0; i < NUMBER_OF_ZONES; i++)
+  {
+    Zone& z(zones[i]);
+    if (z.secondsRemaining > 0)
+    {
+      oneOn = true;
+      pressureRelease = 0;
+      if (z.currentlyOn == false)
+      {
+        fprintf(stderr, "Turning on %s\n\r", zones[i].name.c_str());
+        z.currentlyOn = true;
+      }
+    }
+  }
+
+  if (oneOn)
+  {
+    if (masterOn == false)
+    {
+      fprintf(stderr, "Turning on MASTER\n\r");
+      masterOn = true;
+    }
+  }
+  else
+  {
+    if (masterOn == true)
+    {
+      fprintf(stderr, "Turning off MASTER\n\r");
+      masterOn = false;
+      pressureRelease = 20;
+      fprintf(stderr, "Turning on preassure zone %s\n\r", zones[pressureZone].name.c_str());
+      zones[pressureZone].currentlyOn = true;
+    }
+  }
+
+
 }
 
 void ShutAllValves(void)
@@ -337,5 +409,6 @@ void ShutAllValves(void)
     for (int i = 0; i < NUMBER_OF_ZONES; i++)
     {
         printallsockets("Shutting %s - %i\r\n", zones[i].name.c_str(), zones[i].pin);
+        zones[i].currentlyOn = false;
     }
 }
