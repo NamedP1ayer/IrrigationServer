@@ -7,24 +7,20 @@
 #include <stdlib.h>
 
 
-ZoneController::Commands commands_ = {
-    {"on" , ZoneController::On},
-    {"off", ZoneController::Off},
-    {"status", ZoneController::Status}
-};
-
-// This should be read from a configuration file....
-ZoneController::Zone zones[] = {
-  {"citrus", 2, 0, false},
-  {"grass", 3, 0, false},
-  {"vedgie", 4, 0, false},
-  {"side", 5, 0, false}
-};
-
-static int ZoneController::NUMBER_OF_ZONES = sizeof(zones) / sizeof(Zone);
 
 ZoneController::ZoneController(Server& comms)
-: comms_(comms) {}
+: comms_(comms)
+ {
+    commands_["on"] = &ZoneController::On;
+    commands_["off"] = &ZoneController::Off;
+    commands_["status"] = &ZoneController::Status;
+
+    // zones_ should be read from a configuration file here
+    zones_.push_back({"citrus", 2, 0, false});
+    zones_.push_back({"grass", 3, 0, false});
+    zones_.push_back({"vedgie", 4, 0, false});
+    zones_.push_back({"side", 5, 0, false});
+}
 
 int ZoneController::ParseLine(int filedes, std::string& sentence)
 {
@@ -35,7 +31,7 @@ int ZoneController::ParseLine(int filedes, std::string& sentence)
     {
         if (commands_.find(tokens.front()) != commands_.end())
         {
-            commands_[tokens.front()](filedes, tokens);
+            (this->*(commands_[tokens.front()]))(filedes, tokens);
         }
     }
 }
@@ -46,9 +42,9 @@ void ZoneController::On(int filedes, std::vector<std::string>& line)
   {
     bool found = false;
     int i = 0;
-    for (; i < NUMBER_OF_ZONES && found == false; i++)
+    for (; i < zones_.size() && found == false; i++)
     {
-      found = line[1] == zones[i].name;
+      found = line[1] == zones_[i].name;
     }
     long seconds = strtol(line[2].c_str(), NULL, 10);
 
@@ -59,17 +55,17 @@ void ZoneController::On(int filedes, std::vector<std::string>& line)
     else
     {
       i--;
-      for (int j = 0; j < NUMBER_OF_ZONES; j++)
+      for (int j = 0; j < zones_.size(); j++)
       {
-        if ((i != j) && zones[j].secondsRemaining > 0)
+        if ((i != j) && zones_[j].secondsRemaining > 0)
         {
-          zones[j].secondsRemaining = 0;
-          comms_.PrintfSock(filedes, "Forced zone %s off, ", zones[j].name.c_str());
+          zones_[j].secondsRemaining = 0;
+          comms_.PrintfSock(filedes, "Forced zone %s off, ", zones_[j].name.c_str());
         }
       }
 
-      zones[i].secondsRemaining = seconds;
-      comms_.PrintfSock(filedes, "Zone %s on for %i.\r\n", zones[i].name.c_str(), zones[i].secondsRemaining);
+      zones_[i].secondsRemaining = seconds;
+      comms_.PrintfSock(filedes, "Zone %s on for %i.\r\n", zones_[i].name.c_str(), zones_[i].secondsRemaining);
     }
   }
   else
@@ -84,9 +80,9 @@ void ZoneController::Off(int filedes, std::vector<std::string>& line)
   {
     bool found = false;
     int i = 0;
-    for (; i < NUMBER_OF_ZONES && found == false; i++)
+    for (; i < zones_.size() && found == false; i++)
     {
-      found = line[1] == zones[i].name;
+      found = line[1] == zones_[i].name;
     }
 
     if (found == false)
@@ -96,8 +92,8 @@ void ZoneController::Off(int filedes, std::vector<std::string>& line)
     else
     {
       i--;
-      zones[i].secondsRemaining = 0;
-      comms_.PrintfSock(filedes, "Zone %s off.\r\n", zones[i].name.c_str());
+      zones_[i].secondsRemaining = 0;
+      comms_.PrintfSock(filedes, "Zone %s off.\r\n", zones_[i].name.c_str());
     }
   }
   else
@@ -108,9 +104,9 @@ void ZoneController::Off(int filedes, std::vector<std::string>& line)
 
 void ZoneController::Status(int filedes, std::vector<std::string>& line)
 {
-    for (int j = 0; j < NUMBER_OF_ZONES; j++)
+    for (int j = 0; j < zones_.size(); j++)
     {
-      comms_.PrintfSock(filedes, "(%s, %i)", zones[j].name.c_str(), zones[j].secondsRemaining);
+      comms_.PrintfSock(filedes, "(%s, %i)", zones_[j].name.c_str(), zones_[j].secondsRemaining);
     }
     comms_.PrintfSock(filedes, "\n\r");
 }
@@ -130,9 +126,9 @@ void ZoneController::Periodic(void)
   pressureRelease -= delta;
 
   // first shut them down
-  for (int i = 0; i < NUMBER_OF_ZONES; i++)
+  for (int i = 0; i < zones_.size(); i++)
   {
-    Zone& z(zones[i]);
+    Zone& z(zones_[i]);
     z.secondsRemaining -= delta;
     if (z.secondsRemaining <= 0)
     {
@@ -146,9 +142,9 @@ void ZoneController::Periodic(void)
     }
   }
 
-  for (int i = 0; i < NUMBER_OF_ZONES; i++)
+  for (int i = 0; i < zones_.size(); i++)
   {
-    Zone& z(zones[i]);
+    Zone& z(zones_[i]);
     if (z.secondsRemaining > 0)
     {
       oneOn = true;
@@ -177,7 +173,7 @@ void ZoneController::Periodic(void)
       masterOn = false;
       pressureRelease = 20;
       //TODO fprintf(stderr, "Opening preassure zone %s\n\r", zones[pressureZone].name.c_str());
-      zones[pressureZone].currentlyOn = true;
+      zones_[pressureZone].currentlyOn = true;
     }
   }
 
@@ -188,9 +184,9 @@ void ZoneController::ShutAllValves(void)
 {
     comms_.PrintfAllSockets("Shutting all values\r\n");
     comms_.PrintfAllSockets("Shutting MASTER - %i\r\n", MASTER_PIN);
-    for (int i = 0; i < NUMBER_OF_ZONES; i++)
+    for (int i = 0; i < zones_.size(); i++)
     {
-        comms_.PrintfAllSockets("Shutting %s - %i\r\n", zones[i].name.c_str(), zones[i].pin);
-        zones[i].currentlyOn = false;
+        comms_.PrintfAllSockets("Shutting %s - %i\r\n", zones_[i].name.c_str(), zones_[i].pin);
+        zones_[i].currentlyOn = false;
     }
 }

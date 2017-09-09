@@ -1,4 +1,4 @@
 
 IrrigationServer
 .depend
-main.o
+*.o

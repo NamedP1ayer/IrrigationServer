@@ -5,7 +5,7 @@ CPPFLAGS=-std=c++11
 LDFLAGS=
 LDLIBS=
 
-SRCS=main.cpp
+SRCS=main.cpp server.cpp zone_controller.cpp
 OBJS=$(subst .cpp,.o,$(SRCS))
 
 all: IrrigationServer

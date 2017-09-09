@@ -11,6 +11,11 @@
 
 Server s;
 
+void TerminationHandler(void)
+{
+    s.Terminate();
+}
+
 void SignalHandler(int signum)
 {
     s.Terminate();
@@ -18,7 +23,7 @@ void SignalHandler(int signum)
 
 int main (void)
 {
-    atexit(ShutAllValves);
+    atexit(TerminationHandler);
     if (signal (SIGINT, SignalHandler) == SIG_IGN)
         signal (SIGINT, SIG_IGN);
     if (signal (SIGHUP, SignalHandler) == SIG_IGN)

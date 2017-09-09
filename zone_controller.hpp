@@ -25,7 +25,7 @@ private:
     typedef void (ZoneController::*Command)(int filedes, std::vector<std::string>& line);
 
     typedef std::map<std::string, Command> Commands;
-    static Commands commands_;
+    Commands commands_;
 
     struct Zone
     {
@@ -35,8 +35,7 @@ private:
         bool currentlyOn;
     };
 
-    static Zone zones[];
-    static int NUMBER_OF_ZONES;
+    std::vector<Zone> zones_;
 
     // These two should be read from a configuration file.
     static const int MASTER_PIN = 0;
