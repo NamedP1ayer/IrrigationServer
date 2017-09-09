@@ -1,14 +1,3 @@
-//
-//  main.cpp
-//  SolinoidController
-//
-//  Created by Andrew Fletcher on 7/09/2017.
-//  Copyright © 2017 Andrew Fletcher. All rights reserved.
-//
-
-
-
-
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -20,9 +9,28 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <string>
+#include <stdarg.h>
+#include <signal.h>
+#include <sstream>
+#include <algorithm>
+#include <iterator>
+#include <map>
+#include <vector>
 
 #define PORT    5555
 #define MAXMSG  512
+
+void fprintfsock(int s, const char* f, ...)
+{
+    va_list a;
+    va_start( a, f );
+    int l = vsnprintf( 0, 0, f, a );
+    char* buf = (char*) malloc( l + 1 );
+    va_start( a, f );
+    vsnprintf( buf, l, f, a );
+    send( s, buf, l, 0 );
+    free( buf );
+}
 
 struct Zone
 {
@@ -42,27 +50,44 @@ static const int NUMBER_OF_ZONES = sizeof(zones) / sizeof(Zone);
 
 static const int MASTER_PIN = 0;
 
-void ShutAllValves(void)
+
+struct Connection
 {
-    printf("Shutting all values\n");
-    printf("Shutting MASTER - %i\n", MASTER_PIN);
-    for (int i = 0; i < NUMBER_OF_ZONES; i++)
+  std::string current_line;
+};
+
+typedef std::map<int, Connection> Connections;
+Connections connections_;
+
+void printallsockets(const char* f, ...)
+{
+    va_list a;
+    va_start( a, f );
+    int l = vsnprintf( 0, 0, f, a );
+    char* buf = (char*) malloc( l + 1 );
+    va_start( a, f );
+    vsnprintf( buf, l + 1, f, a );
+
+    for(Connections::iterator it = connections_.begin(); it != connections_.end(); ++it)
     {
-        printf("Shutting %s - %i\n", zones[i].name.c_str(), zones[i].pin);
+       send((*it).first, buf, l, 0);
     }
+    fprintf(stderr, "%s", buf);
+    free( buf );
 }
 
-void SignalHandler(int signum)
+int parse_line(int filedes, std::string& sentence)
 {
-    ShutAllValves();
+  std::istringstream iss(sentence);
+  std::vector<std::string> tokens{std::istream_iterator<string>{iss},
+                      std::istream_iterator<string>{}};
 }
 
-
-int read_from_client (int filedes)
+int read_from_client(int filedes)
 {
     char buffer[MAXMSG];
     ssize_t nbytes;
-    
+
     nbytes = read(filedes, buffer, MAXMSG);
     if (nbytes < 0)
     {
@@ -71,41 +96,39 @@ int read_from_client (int filedes)
         exit (EXIT_FAILURE);
     }
     else if (nbytes == 0)
+    {
     /* End-of-file. */
+        connections_.erase(filedes);
+        printallsockets("Disconnected %i\r\n", filedes);
         return -1;
+    }
     else
     {
-        /* Data read. */
-        char command[32];
-        char zoneName[32];
-        int seconds;
-        size_t count = sscanf(buffer, "%s %s %i", command, zoneName, &seconds);
-        
-        if (count == 3)
+      for (int i = 0; i < nbytes; i++)
+      {
+        if (buffer[i] == '\r')
         {
-            fprintf (stderr, "Server: %s(%s, %i)\n", command, zoneName, seconds);
+
+        }
+        else if (buffer[i] == '\n')
+        {
+          parse_line(filedes, connections_[filedes].current_line);
+          connections_[filedes].current_line.clear();
         }
         else
         {
-            count = sscanf(buffer, "%s %s", command, zoneName);
-            if (count == 2)
-            {
-                fprintf (stderr, "Server: %s(%s)\n", command, zoneName, seconds);
-            }
-            else
-            {
-                fprintf (stderr, "Server: got crap message (%i): `%s'\n", (int)count, buffer);
-            }
+          connections_[filedes].current_line += buffer[i];
         }
+      }
         return 0;
     }
 }
 
-int make_socket (uint16_t port)
+int make_socket(uint16_t port)
 {
     int sock;
     struct sockaddr_in name;
-    
+
     /* Create the socket. */
     sock = socket (PF_INET, SOCK_STREAM, 0);
     if (sock < 0)
@@ -113,7 +136,7 @@ int make_socket (uint16_t port)
         perror ("socket");
         exit (EXIT_FAILURE);
     }
-    
+
     /* Give the socket a name. */
     name.sin_family = AF_INET;
     name.sin_port = htons (port);
@@ -123,8 +146,24 @@ int make_socket (uint16_t port)
         perror ("bind");
         exit (EXIT_FAILURE);
     }
-    
+
     return sock;
+}
+
+
+void ShutAllValves(void)
+{
+    printallsockets("Shutting all values\r\n");
+    printallsockets("Shutting MASTER - %i\r\n", MASTER_PIN);
+    for (int i = 0; i < NUMBER_OF_ZONES; i++)
+    {
+        printallsockets("Shutting %s - %i\r\n", zones[i].name.c_str(), zones[i].pin);
+    }
+}
+
+void SignalHandler(int signum)
+{
+    ShutAllValves();
 }
 
 int main (void)
@@ -136,14 +175,14 @@ int main (void)
         signal (SIGHUP, SIG_IGN);
     if (signal (SIGTERM, SignalHandler) == SIG_IGN)
         signal (SIGTERM, SIG_IGN);
-    
+
     int sock;
     fd_set active_fd_set, read_fd_set;
     int i;
     struct sockaddr_in clientname;
     socklen_t size;
     struct timeval timeout;
-    
+
     /* Create the socket and set it up to accept connections. */
     sock = make_socket (PORT);
     if (listen (sock, 1) < 0)
@@ -151,11 +190,11 @@ int main (void)
         perror ("listen");
         exit (EXIT_FAILURE);
     }
-    
+
     /* Initialize the set of active sockets. */
     FD_ZERO (&active_fd_set);
     FD_SET (sock, &active_fd_set);
-    
+
     while (1)
     {
         /* Block until input arrives on one or more active sockets. */
@@ -186,8 +225,7 @@ int main (void)
                         perror ("accept");
                         exit (EXIT_FAILURE);
                     }
-                    fprintf (stderr,
-                             "Server: connect from host %s, port %hd.\n",
+                    printallsockets("Server: connect from host %s, port %hd.\r\n",
                              inet_ntoa (clientname.sin_addr),
                              ntohs (clientname.sin_port));
                     FD_SET (new_con, &active_fd_set);
@@ -204,4 +242,3 @@ int main (void)
             }
     }
 }
-
