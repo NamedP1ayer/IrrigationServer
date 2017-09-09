@@ -3,7 +3,7 @@ CXX=g++
 RM=rm -f
 CPPFLAGS=-std=c++11
 LDFLAGS=
-LDLIBS=
+LDLIBS=-lwiringPi
 
 SRCS=main.cpp server.cpp zone_controller.cpp
 OBJS=$(subst .cpp,.o,$(SRCS))

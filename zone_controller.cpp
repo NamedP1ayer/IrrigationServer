@@ -5,12 +5,12 @@
 #include <iterator>
 #include <time.h>
 #include <stdlib.h>
-
-
+#include <wiringPi.h>
 
 ZoneController::ZoneController(Server& comms)
 : comms_(comms)
  {
+    wiringPiSetup();
     commands_["on"] = &ZoneController::On;
     commands_["off"] = &ZoneController::Off;
     commands_["status"] = &ZoneController::Status;
@@ -24,6 +24,16 @@ ZoneController::ZoneController(Server& comms)
     master_.name = "MASTER";
     master_.pin = 0;
     master_.currentlyOn = false;
+
+    pinMode(master_.pin, OUTPUT);
+    digitalWrite(master_.pin, LOW);
+
+    for (int j = 0; j < zones_.size(); j++)
+    {
+        Zone& z(zones_[j]);
+        pinMode(z.pin, OUTPUT);
+        digitalWrite(z.pin, LOW);
+    }
 }
 
 int ZoneController::ParseLine(int filedes, std::string& sentence)
@@ -193,11 +203,13 @@ void ZoneController::ShutAllValves(void)
 void ZoneController::Open(Zone & z)
 {
     comms_.PrintfAllSockets("Opening %s, pin %i\r\n", z.name.c_str(), z.pin);
+    digitalWrite(z.pin, HIGH);
     z.currentlyOn = true;
 }
 
 void ZoneController::Close(Zone & z)
 {
     comms_.PrintfAllSockets("Shutting %s, pin %i\r\n", z.name.c_str(), z.pin);
+    digitalWrite(z.pin, LOW);
     z.currentlyOn = false;
 }
