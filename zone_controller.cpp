@@ -26,13 +26,13 @@ ZoneController::ZoneController(Server& comms)
     master_.currentlyOn = false;
 
     pinMode(master_.pin, OUTPUT);
-    digitalWrite(master_.pin, LOW);
+    digitalWrite(master_.pin, HIGH);
 
     for (int j = 0; j < zones_.size(); j++)
     {
         Zone& z(zones_[j]);
         pinMode(z.pin, OUTPUT);
-        digitalWrite(z.pin, LOW);
+        digitalWrite(z.pin, HIGH);
     }
 }
 
@@ -203,13 +203,13 @@ void ZoneController::ShutAllValves(void)
 void ZoneController::Open(Zone & z)
 {
     comms_.PrintfAllSockets("Opening %s, pin %i\r\n", z.name.c_str(), z.pin);
-    digitalWrite(z.pin, HIGH);
+    digitalWrite(z.pin, LOW);
     z.currentlyOn = true;
 }
 
 void ZoneController::Close(Zone & z)
 {
     comms_.PrintfAllSockets("Shutting %s, pin %i\r\n", z.name.c_str(), z.pin);
-    digitalWrite(z.pin, LOW);
+    digitalWrite(z.pin, HIGH);
     z.currentlyOn = false;
 }
