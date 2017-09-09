@@ -244,10 +244,10 @@ struct Zone
 };
 
 Zone zones[] = {
-    {"Citrus", 2, 0},
-    {"Grass", 3, 0},
-    {"Vedgie", 4, 0},
-    {"Side", 5, 0}
+    {"citrus", 2, 0},
+    {"grass", 3, 0},
+    {"vedgie", 4, 0},
+    {"side", 5, 0}
 };
 
 static const int NUMBER_OF_ZONES = sizeof(zones) / sizeof(Zone);
@@ -256,22 +256,78 @@ static const int MASTER_PIN = 0;
 
 void On(int filedes, std::vector<std::string>& line)
 {
-  fprintfsock(filedes, "On!\r\n");
+  if (line.size() == 3)
+  {
+    bool found = false;
+    for (int i = 0; i < NUMBER_OF_ZONES && found == false; i++)
+    {
+      found = line[2] == zones[i].name;
+    }
+    long seconds = strtol(line[2].c_str(), NULL, 10);
+
+    if (found == false)
+    {
+      fprintfsock(filedes, "Unable to find zone %s.\r\n", line[1].c_str());
+    }
+    else
+    {
+
+      for (int j = 0; j < NUMBER_OF_ZONES; j++)
+      {
+        if ((i != j) && zones[j].secondsRemaining > 0)
+        {
+          zones[j].secondsRemaining = 0;
+          fprintfsock(filedes, "Forced zone %s off, ", zones[j].name.c_str());
+        }
+      }
+
+      zones[i].secondsRemaining = seconds;
+      fprintfsock(filedes, "Zone %s on for %i.\r\n", zones[i].name.c_str(), zones[i].secondsRemaining);
+    }
+  }
+  else
+  {
+    fprintfsock(filedes, "Bad arguements to On.\r\n");
+  }
 }
 
 void Off(int filedes, std::vector<std::string>& line)
 {
-  fprintfsock(filedes, "Off!\r\n");
+  if (line.size() == 2)
+  {
+    bool found = false;
+    for (int i = 0; i < NUMBER_OF_ZONES && found == false; i++)
+    {
+      found = line[2] == zones[i].name;
+    }
+
+    if (found == false)
+    {
+      fprintfsock(filedes, "Unable to find zone %s.\r\n", line[1].c_str());
+    }
+    else
+    {
+      zones[i].secondsRemaining = 0;
+      fprintfsock(filedes, "Zone %s off.\r\n", zones[i].name.c_str());
+    }
+  }
+  else
+  {
+    fprintfsock(filedes, "Bad arguements to On.\r\n");
+  }
 }
 
 void Status(int filedes, std::vector<std::string>& line)
 {
-  fprintfsock(filedes, "Status!\r\n");
+    for (int j = 0; j < NUMBER_OF_ZONES; j++)
+    {
+      fprintfsock(filedes, "(%s, %i)", zones[j].name.c_str(), zones[j].secondsRemaining);
+    }
 }
 
 void Periodic(void)
 {
-  printallsockets("Periodic!\r\n");
+  //printallsockets("Periodic!\r\n");
 }
 
 void ShutAllValves(void)
