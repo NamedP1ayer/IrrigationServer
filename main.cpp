@@ -26,10 +26,8 @@ int main (void)
     atexit(TerminationHandler);
     if (signal (SIGINT, SignalHandler) == SIG_IGN)
         signal (SIGINT, SIG_IGN);
-#ifndef WIN32
     if (signal (SIGHUP, SignalHandler) == SIG_IGN)
         signal (SIGHUP, SIG_IGN);
-#endif
     if (signal (SIGTERM, SignalHandler) == SIG_IGN)
         signal (SIGTERM, SIG_IGN);
 

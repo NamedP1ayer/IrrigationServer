@@ -5,29 +5,17 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
-#ifdef WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#else
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#endif
-#include <sys/time.h>
 
 #define PORT    5555
 #define MAXMSG  512
 
 Server::Server(void) : controller_(*this)
-{
-#ifdef WIN32
-    WORD wVersionRequested;
-    WSADATA wsaData;
-    wVersionRequested = MAKEWORD(2, 2);
-    WSAStartup(wVersionRequested, &wsaData);
-#endif
-}
+{}
 
 
 void Server::RunServer(void)

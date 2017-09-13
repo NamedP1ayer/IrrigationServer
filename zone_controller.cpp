@@ -5,13 +5,7 @@
 #include <iterator>
 #include <time.h>
 #include <stdlib.h>
-#ifdef WIN32
-#define wiringPiSetup()
-#define pinMode(x, y)
-#define digitalWrite(x, y)
-#else
 #include <wiringPi.h>
-#endif
 
 ZoneController::ZoneController(Server& comms)
 : comms_(comms)
