@@ -47,6 +47,10 @@ int ZoneController::ParseLine(int filedes, std::string& sentence)
         {
             (this->*(commands_[tokens.front()]))(filedes, tokens);
         }
+	else
+	{
+	    comms_.PrintfSock(filedes, "No command %s\r\n", tokens.front().c_str());
+	}
     }
 }
 

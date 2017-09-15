@@ -100,6 +100,7 @@ void Server::PrintfSock(int s, const char* f, ...)
     char* buf = (char*)malloc(l + 1);
     va_start(a, f);
     vsnprintf(buf, l + 1, f, a);
+    fprintf(stderr, "%s", buf);
     send(s, buf, l, 0);
     free(buf);
 }
@@ -132,7 +133,9 @@ int Server::ReadFromClient(int filedes)
     {
         /* Read error. */
         perror("read");
-        exit(EXIT_FAILURE);
+	connections_.erase(filedes);
+	PrintfAllSockets("Unplesant disconnection %i\r\n", filedes);
+        return -1;
     }
     else if (nbytes == 0)
     {
